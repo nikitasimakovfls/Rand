@@ -17,7 +17,7 @@ test.describe('Clinician/Admin Cross-Role Workflow', () => {
     const testEmail = `cross_role_${randomSuffix}@example.com`;
     const redcapId = randomSuffix;
 
-    // --- STEP 1: Creation of the patient by CLINICIAN ---
+    // STEP 1: Creation of the patient by CLINICIAN
     await page.goto('/');
     await loginPage.enterUsername(process.env.CLINICIAN_USER!);
     await loginPage.enterPassword(process.env.CLINICIAN_PASSWORD!);
@@ -45,7 +45,7 @@ test.describe('Clinician/Admin Cross-Role Workflow', () => {
     const patientRow = page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName });
     await expect(patientRow).toBeVisible({ timeout: 10000 });
     
-    // --- STEP 2: Removing of the patient by ADMIN ---
+    // STEP 2: Removing of the patient by ADMIN
     console.log(`Switching to Admin for cleanup. Target: ${testEmail}`);
     
     // Step 2.1: Secure Logout
@@ -62,7 +62,6 @@ test.describe('Clinician/Admin Cross-Role Workflow', () => {
     await loginPage.enterPassword(process.env.ADMIN_PASSWORD!);
     await expect(page).toHaveURL(/.*admin/, { timeout: 15000 });
     
-
     // Step 2.3: Sort and Delete the record
     await adminPage.goToPatients();
     const firstNameSortBtn = page.getByRole('button', { name: 'First Name' });
@@ -72,7 +71,6 @@ test.describe('Clinician/Admin Cross-Role Workflow', () => {
     
     // Step 2.4: Final verification
     await expect(patientRow).not.toBeVisible({ timeout: 10000 });
-    
     console.log('Success: Patient created by Clinician and removed by Admin.');
   });
 });

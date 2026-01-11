@@ -11,7 +11,6 @@ test.describe('Admin Workflow - Patient Management', () => {
   test('should successfully create, find on any page and remove a patient', async ({ page }) => {
     const loginPage = new LoginPage(page);
     const adminPage = new AdminPage(page);
-
     const randomSuffix = generateRandomSuffix();
     const testEmail = `patient_${randomSuffix}@example.com`;
     const redcapId = randomSuffix;

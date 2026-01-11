@@ -29,7 +29,7 @@ test.describe('Admin Workflow - Clinician Lifecycle', () => {
     // 3. Verify existence with auto-waiting (Fix)
     console.log(`Searching for newly created doctor: ${testEmail}`);
     
-    // Using a locator with visibility expectation instead of a native boolean
+    // Using a locator with visibility expectation
     const clinicianRow = page.locator('tr', { hasText: testEmail });
     await expect(clinicianRow).toBeVisible({ timeout: 10000 });
 
