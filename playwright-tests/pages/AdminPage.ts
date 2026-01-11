@@ -20,6 +20,7 @@ export class AdminPage {
   readonly sexSelect: Locator;
   readonly phoneInput: Locator;
   readonly testUserCheckbox: Locator;
+  readonly smsCheckbox: Locator; // New: for unchecking the box
   readonly redCapInput: Locator;
   readonly mrnInput: Locator;
   readonly clinicSelect: Locator;
@@ -51,6 +52,7 @@ export class AdminPage {
     this.sexSelect = page.locator('select#sex');
     this.phoneInput = page.locator('input#phone');
     this.testUserCheckbox = page.locator('input#testUser');
+    this.smsCheckbox = page.locator('#smsNotifications'); // Added for new tests
     this.redCapInput = page.locator('input#redCapStudyId');
     this.mrnInput = page.locator('input#mrn');
     this.clinicSelect = page.locator('select#clinicId');
@@ -62,7 +64,7 @@ export class AdminPage {
     this.errorMessageList = page.locator('ul.list-unstyled');
   }
 
-  // --- Clinicians methods ---
+  // --- Clinicians methods (Kept without changes) ---
 
   async goToClinicians() {
     const loader = this.page.locator('text=Loading');
@@ -131,7 +133,7 @@ export class AdminPage {
     await expect(row).not.toBeVisible({ timeout: 10000 });
   }
 
-  // --- Patient methods ---
+  // --- Patient methods (Safely updated) ---
 
   async goToPatients() {
     const loader = this.page.locator('text=Loading');
@@ -148,23 +150,35 @@ export class AdminPage {
     await expect(this.page).toHaveURL(/.*patient\/add/);
   }
 
+  /**
+   * fillPatientData updated: optional parameter uncheckSms added.
+   * Legacy tests will continue to work as uncheckSms defaults to false.
+   */
   async fillPatientData(data: { 
     first: string, last: string, email: string, sex: string, 
-    phone: string, redcap: string, mrn: string, clinic: string, lang: string 
+    phone: string, redcap: string, mrn: string, clinic: string, lang: string,
+    uncheckSms?: boolean 
   }) {
     await this.firstNameInput.fill(data.first);
     await this.lastNameInput.fill(data.last);
     await this.emailInput.fill(data.email);
     await this.sexSelect.selectOption({ label: data.sex });
     await this.phoneInput.fill(data.phone);
-    await this.testUserCheckbox.check();
+    
+    // New logic: if uncheckSms is requested
+    if (data.uncheckSms) {
+      await this.smsCheckbox.uncheck();
+    } else {
+      await this.testUserCheckbox.check();
+    }
+
     await this.redCapInput.fill(data.redcap);
     await this.mrnInput.fill(data.mrn);
     await this.clinicSelect.selectOption({ label: data.clinic });
     await this.languageSelect.selectOption({ label: data.lang });
   }
 
-  async submitForm(redirectUrlPattern: string) {
+  async submitForm(redirectUrlPattern: string | RegExp) { // RegExp support for stability
     await this.finalAddButton.click();
     await this.page.waitForTimeout(1500);
 
