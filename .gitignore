@@ -1,0 +1,16 @@
+**/node_modules/
+
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/.cache/
+
+**/.env
+**/.env.*
+
+*.log
+.DS_Store
+
+**/videos/
+**/screenshots/
+**/*.png
