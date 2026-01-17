@@ -12,10 +12,10 @@ test.describe('Universal Language Switch Test', () => {
     await loginPage.enterUsername(process.env.PATIENT_USER!);
     await loginPage.enterPassword(process.env.PATIENT_PASSWORD!);
 
-    // 1. Navigate to Settings (method handles button text localization)
+    // Navigate to Settings (method handles button text localization)
     await settingsPage.goToSettings();
 
-    // 2. Determine initial language based on the page title
+    // Determine initial language based on the page title
     const currentTitle = await settingsPage.pageTitle.innerText();
     console.log(`Initial page title: ${currentTitle}`);
 

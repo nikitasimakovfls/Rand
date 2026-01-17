@@ -15,17 +15,17 @@ test.describe('Admin Workflow - Patient Management', () => {
     const testEmail = `patient_${randomSuffix}@example.com`;
     const redcapId = randomSuffix;
 
-    // 1. Authorization
+    // Authorization
     await page.goto('/');
     await loginPage.enterUsername(process.env.ADMIN_USER!);
     await loginPage.enterPassword(process.env.ADMIN_PASSWORD!);
     await expect(page).toHaveURL(/.*admin/, { timeout: 15000 });
 
-    // 2. Open Patient Creation Form
+    // Open Patient Creation Form
     await adminPage.goToPatients();
     await adminPage.openAddPatientForm();
     
-    // 3. Fill Patient Data
+    // Fill Patient Data
     await adminPage.fillPatientData({
       first: firstName,
       last: lastName,
@@ -38,10 +38,10 @@ test.describe('Admin Workflow - Patient Management', () => {
       lang: 'English'
     });
 
-    // 4. Submit Form and verify redirection
+    // Submit Form and verify redirection
     await adminPage.submitForm(/\/admin\/patient/);
 
-    // 5. Verify patient existence with auto-waiting (Fix for stability)
+    // Verify patient existence with auto-waiting (Fix for stability)
     const firstNameSortBtn = page.getByRole('button', { name: 'First Name' });
     await firstNameSortBtn.click();
     await page.waitForLoadState('networkidle');
@@ -49,7 +49,7 @@ test.describe('Admin Workflow - Patient Management', () => {
     const patientRow = page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName });
     await expect(patientRow).toBeVisible({ timeout: 10000 });
 
-    // 6. Cleanup (Removal)
+    // Cleanup (Removal)
     await adminPage.deletePatientByName(firstName, lastName);
     
     // Verify the patient is no longer visible in the table

@@ -1,12 +1,22 @@
 import { defineConfig, devices } from '@playwright/test';
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 import path from 'path';
 
-/**
- * Read environment variables from .env file.
- * We use path.resolve to ensure the path is correct on Linux/Ubuntu.
- */
+// Getting var from .env
 dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+/**
+ * URL selecting logic base on ENV vars
+ */
+const environments = {
+  dev: process.env.DEV_URL || 'https://dev.itreat.clnapp.com',
+  prod1: process.env.PROD1_URL,
+  prod2: process.env.PROD2_URL,
+};
+
+// Reading ENV from cmd
+const ENV = (process.env.ENV as keyof typeof environments) || 'dev';
+const targetURL = environments[ENV] || environments.dev;
 
 export default defineConfig({
   testDir: './tests',
@@ -15,16 +25,12 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
-
+  
   use: {
-    /* * IMPORTANT: Using APP_URL from your .env file.
-     * We add a fallback to the string URL just in case.
-     */
-    baseURL: process.env.APP_URL || 'https://dev.itreat.clnapp.com',
+    baseURL: targetURL,
 
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    // Video is very helpful for debugging on VM
     video: 'retain-on-failure',
   },
 
@@ -33,7 +39,5 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Firefox and Webkit often have issues with GUI/Drivers on VMs, 
-    // so Chromium is our primary target.
   ],
 });

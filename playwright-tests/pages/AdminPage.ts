@@ -20,7 +20,7 @@ export class AdminPage {
   readonly sexSelect: Locator;
   readonly phoneInput: Locator;
   readonly testUserCheckbox: Locator;
-  readonly smsCheckbox: Locator; // New: for unchecking the box
+  readonly smsCheckbox: Locator;
   readonly redCapInput: Locator;
   readonly mrnInput: Locator;
   readonly clinicSelect: Locator;
@@ -64,7 +64,7 @@ export class AdminPage {
     this.errorMessageList = page.locator('ul.list-unstyled');
   }
 
-  // --- Clinicians methods (Kept without changes) ---
+  // --- Clinicians methods ---
 
   async goToClinicians() {
     const loader = this.page.locator('text=Loading');
@@ -133,7 +133,7 @@ export class AdminPage {
     await expect(row).not.toBeVisible({ timeout: 10000 });
   }
 
-  // --- Patient methods (Safely updated) ---
+  // --- Patient methods ---
 
   async goToPatients() {
     const loader = this.page.locator('text=Loading');
@@ -152,7 +152,6 @@ export class AdminPage {
 
   /**
    * fillPatientData updated: optional parameter uncheckSms added.
-   * Legacy tests will continue to work as uncheckSms defaults to false.
    */
   async fillPatientData(data: { 
     first: string, last: string, email: string, sex: string, 
@@ -178,7 +177,7 @@ export class AdminPage {
     await this.languageSelect.selectOption({ label: data.lang });
   }
 
-  async submitForm(redirectUrlPattern: string | RegExp) { // RegExp support for stability
+  async submitForm(redirectUrlPattern: string | RegExp) {
     await this.finalAddButton.click();
     await this.page.waitForTimeout(1500);
 
