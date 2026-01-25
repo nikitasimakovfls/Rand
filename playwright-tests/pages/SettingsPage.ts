@@ -20,7 +20,7 @@ export class SettingsPage {
   async goToSettings() {
     await this.settingsNavLink.waitFor({ state: 'visible' });
     const currentLinkText = await this.settingsNavLink.innerText();
-    console.log(`Current language detected by nav link: ${currentLinkText}`);
+    //console.log(`Current language detected by nav link: ${currentLinkText}`);
     
     await this.settingsNavLink.click();
     await this.page.waitForURL('**/settings');

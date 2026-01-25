@@ -2,7 +2,8 @@ import { Page, Locator, expect } from '@playwright/test';
 
 export class AdminPage {
   readonly page: Page;
-  // Navigation
+  
+  // Navigation elements
   readonly cliniciansSidebarLink: Locator;
   readonly patientsSidebarLink: Locator;
   
@@ -14,12 +15,12 @@ export class AdminPage {
   readonly modalAddClinicButton: Locator;
 
   // Patient form elements
-  readonly addPatientButton: Locator;
   readonly firstNameInput: Locator;
   readonly lastNameInput: Locator;
+  readonly emailInput: Locator;
   readonly sexSelect: Locator;
   readonly phoneInput: Locator;
-  readonly testUserCheckbox: Locator;
+  readonly testUserLabel: Locator;
   readonly smsCheckbox: Locator;
   readonly redCapInput: Locator;
   readonly mrnInput: Locator;
@@ -27,58 +28,50 @@ export class AdminPage {
   readonly languageSelect: Locator;
 
   // Common elements
-  readonly emailInput: Locator;
   readonly finalAddButton: Locator;
   readonly errorMessageList: Locator;
 
   constructor(page: Page) {
     this.page = page;
     
-    // Sidebar links
+    // Sidebar locators
     this.cliniciansSidebarLink = page.locator('a.sidebarLink[href="/admin/clinicians"]');
     this.patientsSidebarLink = page.locator('a.sidebarLink[href="/admin/patient"]');
     
-    // Clinician form elements
+    // Clinician form locators
     this.addClinicianButton = page.locator('a[href="/admin/clinicians/add"]');
     this.nameInput = page.locator('input#name');
     this.clinicSelectAddDoctor = page.locator('select#id');
     this.getCallbackCheckbox = page.locator('input#isGetCallbackRequests');
     this.modalAddClinicButton = page.locator('.modal-footer button.btn-primary:has-text("Add clinic")');
 
-    // Patient form elements
-    this.addPatientButton = page.locator('a[href="/admin/patient/add"]');
+    // Patient form locators
     this.firstNameInput = page.locator('input#firstName');
     this.lastNameInput = page.locator('input#lastName');
     this.sexSelect = page.locator('select#sex');
     this.phoneInput = page.locator('input#phone');
-    this.testUserCheckbox = page.locator('input#testUser');
-    this.smsCheckbox = page.locator('#smsNotifications'); // Added for new tests
+    this.testUserLabel = page.locator('label[for="testUser"]');
+    this.smsCheckbox = page.locator('#smsNotifications');
     this.redCapInput = page.locator('input#redCapStudyId');
     this.mrnInput = page.locator('input#mrn');
     this.clinicSelect = page.locator('select#clinicId');
     this.languageSelect = page.locator('select#language');
     
-    // Common elements
+    // Shared locators
     this.emailInput = page.locator('input#email');
     this.finalAddButton = page.locator('button.btn-primary:has-text("Add")');
     this.errorMessageList = page.locator('ul.list-unstyled');
   }
 
-  // --- Clinicians methods ---
+  // --- Clinician Actions ---
 
-  async goToClinicians() {
-    const loader = this.page.locator('text=Loading');
-    if (await loader.isVisible()) {
-      await loader.waitFor({ state: 'hidden', timeout: 15000 });
-    }
-    await this.cliniciansSidebarLink.waitFor({ state: 'visible' });
-    await this.cliniciansSidebarLink.click();
-    await expect(this.page).toHaveURL(/.*admin\/clinicians/);
-  }
-
-  async openAddClinicianForm() {
-    await this.addClinicianButton.click();
-    await expect(this.page).toHaveURL(/.*clinicians\/add/);
+  /**
+   * Scrolls to and toggles the 'Test User' checkbox via its label.
+   */
+  async markAsTestUser() {
+    await this.testUserLabel.scrollIntoViewIfNeeded();
+    await this.testUserLabel.click();
+    await expect(this.page.locator('input#testUser')).toBeChecked();
   }
 
   async fillClinicianData(name: string, email: string) {
@@ -86,135 +79,114 @@ export class AdminPage {
     await this.emailInput.fill(email);
   }
 
+  /**
+   * Handles the 'Add Clinic' modal for a clinician.
+   */
   async addClinicToClinician() {
-    await this.page.locator('button:has-text("Add Clinic")').click();
+    const addClinicBtn = this.page.getByRole('button', { name: 'Add Clinic' });
+    await addClinicBtn.click();
+    
     await this.clinicSelectAddDoctor.waitFor({ state: 'visible' });
     await this.clinicSelectAddDoctor.selectOption({ label: 'Regression Clinic' });
-    await this.getCallbackCheckbox.check();
+    
+    const callbackLabel = this.page.locator('label[for="isGetCallbackRequests"]');
+    // Toggle callback checkbox if label is visible, otherwise check directly
+    if (await callbackLabel.isVisible()) {
+        await callbackLabel.click();
+    } else {
+        await this.getCallbackCheckbox.check();
+    }
+    
     await this.modalAddClinicButton.click();
-    await this.modalAddClinicButton.waitFor({ state: 'hidden' });
+    await expect(this.modalAddClinicButton).toBeHidden();
   }
 
-  async submitClinicianForm() {
-    await this.finalAddButton.click();
-    await this.page.waitForTimeout(1500);
-
-    if (await this.errorMessageList.isVisible()) {
-      const errorText = await this.errorMessageList.innerText();
-      throw new Error(`🛑 Creation failed: ${errorText.trim()}`);
-    }
-    await this.page.waitForURL('**/admin/clinicians', { timeout: 15000 });
+  async goToClinicians() {
+    await this.cliniciansSidebarLink.click();
+    await expect(this.page).toHaveURL(/.*admin\/clinicians/);
   }
 
-  async findClinicianByEmail(email: string) {
-    let currentPage = 1;
-    while (true) {
-      const emailCell = this.page.locator(`td.table-column-wrap:has-text("${email}")`);
-      if (await emailCell.isVisible()) return true;
-
-      currentPage++;
-      const nextBtn = this.page.locator(`.page-item button:text("${currentPage}")`);
-      if (await nextBtn.isVisible()) {
-        await nextBtn.click();
-        await this.page.waitForLoadState('networkidle');
-      } else {
-        break;
-      }
-    }
-    return false;
-  }
-
-  async deleteClinicianByEmail(email: string) {
-    const row = this.page.locator('tr').filter({ has: this.page.locator('td', { hasText: email }) });
-    await row.getByRole('button', { name: 'Remove clinician' }).click();
-    this.page.once('dialog', dialog => dialog.accept());
-    const confirmBtn = this.page.locator('.modal-footer button.btn-danger, .modal-footer button:has-text("Delete")');
-    if (await confirmBtn.isVisible({ timeout: 2000 })) await confirmBtn.click();
-    await expect(row).not.toBeVisible({ timeout: 10000 });
-  }
-
-  // --- Patient methods ---
-
-  async goToPatients() {
-    const loader = this.page.locator('text=Loading');
-    if (await loader.isVisible()) {
-      await loader.waitFor({ state: 'hidden', timeout: 15000 });
-    }
-    await this.patientsSidebarLink.waitFor({ state: 'visible' });
-    await this.patientsSidebarLink.click();
-    await expect(this.page).toHaveURL(/.*admin\/patient/);
-  }
-
-  async openAddPatientForm() {
-    await this.addPatientButton.click();
-    await expect(this.page).toHaveURL(/.*patient\/add/);
+  async openAddClinicianForm() {
+    await this.addClinicianButton.click();
   }
 
   /**
-   * fillPatientData updated: optional parameter uncheckSms added.
+   * Deletes a clinician by email and confirms via modal.
    */
-  async fillPatientData(data: { 
-    first: string, last: string, email: string, sex: string, 
-    phone: string, redcap: string, mrn: string, clinic: string, lang: string,
-    uncheckSms?: boolean 
-  }) {
+  async deleteClinicianByEmail(email: string) {
+    const row = this.page.locator('tr').filter({ hasText: email });
+    await row.getByRole('button', { name: /Remove clinician/i }).click();
+    
+    const modal = this.page.locator('.modal-content');
+    await expect(modal).toBeVisible();
+    
+    await modal.locator('.modal-footer').getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(modal).toBeHidden();
+    await expect(row).not.toBeVisible({ timeout: 10000 });
+  }
+
+  /**
+   * Sorts the clinician table by name and waits for the API response.
+   */
+  async sortByName() {
+    const nameSortBtn = this.page.getByRole('button', { name: 'Name', exact: true });
+    await nameSortBtn.waitFor({ state: 'visible' });
+    
+    await Promise.all([
+      this.page.waitForResponse(
+        res => res.url().includes('name&sortBy=asc') && res.status() === 200,
+        { timeout: 20000 }
+      ),
+      nameSortBtn.click(),
+    ]);
+    // Wait for the table to refresh by checking the first row
+    await this.page.locator('tr').first().waitFor({ state: 'visible' });
+  }
+
+  // --- Patient Actions ---
+
+  async goToPatients() {
+    await this.patientsSidebarLink.click();
+    await expect(this.page).toHaveURL(/.*admin\/patient/);
+    
+    // Wait for the loading overlay to disappear if it appears
+    const loader = this.page.locator('text=Loading');
+    if (await loader.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await expect(loader).toBeHidden({ timeout: 15000 });
+    }
+  }
+
+  async openAddPatientForm() {
+    await this.page.getByRole('link', { name: 'Add Patient', exact: true }).click();
+    await expect(this.page).toHaveURL(/.*patient\/add/);
+  }
+
+  async fillPatientData(data: any) {
     await this.firstNameInput.fill(data.first);
     await this.lastNameInput.fill(data.last);
     await this.emailInput.fill(data.email);
     await this.sexSelect.selectOption({ label: data.sex });
     await this.phoneInput.fill(data.phone);
-    
-    // New logic: if uncheckSms is requested
-    if (data.uncheckSms) {
-      await this.smsCheckbox.uncheck();
-    } else {
-      await this.testUserCheckbox.check();
-    }
-
+    if (data.uncheckSms) await this.smsCheckbox.uncheck();
     await this.redCapInput.fill(data.redcap);
     await this.mrnInput.fill(data.mrn);
     await this.clinicSelect.selectOption({ label: data.clinic });
     await this.languageSelect.selectOption({ label: data.lang });
   }
 
-  async submitForm(redirectUrlPattern: string | RegExp) {
+  async submitForm(successUrlRegex: RegExp = /.*admin\/patient/) {
     await this.finalAddButton.click();
-    await this.page.waitForTimeout(1500);
-
-    if (await this.errorMessageList.isVisible()) {
-      const errorText = await this.errorMessageList.innerText();
-      throw new Error(`🛑 Creation failed: ${errorText.trim()}`);
-    }
-    await this.page.waitForURL(redirectUrlPattern, { timeout: 15000 });
+    await expect(this.page).toHaveURL(successUrlRegex);
   }
 
-  async findPatientByName(firstName: string, lastName: string) {
-    let currentPage = 1;
-    while (true) {
-      const patientRow = this.page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName });
-      if (await patientRow.count() > 0 && await patientRow.first().isVisible()) return true;
-
-      currentPage++;
-      const nextBtn = this.page.locator(`.page-item button:text("${currentPage}")`);
-      if (await nextBtn.isVisible()) {
-        await nextBtn.click();
-        await this.page.waitForLoadState('networkidle');
-        await this.page.waitForTimeout(1000); 
-      } else {
-        break;
-      }
-    }
-    return false;
-  }
-
-  async deletePatientByName(firstName: string, lastName: string) {
-    const row = this.page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName }).first();
-    await row.getByRole('button', { name: 'Remove patient' }).click();
-    
+  /**
+   * Deletes a patient by email (handles browser native dialogs).
+   */
+  async deletePatientByEmail(email: string) {
+    const row = this.page.locator('tr').filter({ hasText: email });
+    // Handle native browser 'confirm' dialog
     this.page.once('dialog', dialog => dialog.accept());
-    const confirmBtn = this.page.locator('.modal-footer button.btn-danger, .modal-footer button:has-text("Delete")');
-    if (await confirmBtn.isVisible({ timeout: 2000 })) await confirmBtn.click();
-    
-    await expect(row).not.toBeVisible({ timeout: 10000 });
+    await row.locator('.btn-danger, [title*="Delete"]').click();
+    await expect(row).not.toBeVisible();
   }
 }

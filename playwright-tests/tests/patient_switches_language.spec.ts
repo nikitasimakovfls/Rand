@@ -2,43 +2,52 @@ import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { SettingsPage } from '../pages/SettingsPage';
 
-test.describe('Universal Language Switch Test', () => {
+test.describe('Patient Language Management', () => {
 
-  test('should detect current language and toggle it', async ({ page }) => {
+  test('should detect current language and toggle it correctly', async ({ page }) => {
     const loginPage = new LoginPage(page);
     const settingsPage = new SettingsPage(page);
 
+    // --- Step 1: Authentication ---
     await page.goto('/');
     await loginPage.enterUsername(process.env.PATIENT_USER!);
     await loginPage.enterPassword(process.env.PATIENT_PASSWORD!);
 
-    // Navigate to Settings (method handles button text localization)
+    console.log(`[Patient] Loged In`);
+
+    // --- Step 2: Navigation ---
     await settingsPage.goToSettings();
 
-    // Determine initial language based on the page title
+    // --- Step 3: Conditional Language Toggling ---
+    // Determine the initial language state by checking the page title
     const currentTitle = await settingsPage.pageTitle.innerText();
-    console.log(`Initial page title: ${currentTitle}`);
+    console.log(`[Service] Detected initial page title: "${currentTitle.trim()}"`);
 
     if (currentTitle.trim() === 'Settings') {
-      // PATH A: Current language is English -> Switch to Spanish
-      console.log('Detected English. Switching to Spanish...');
+      // PATH A: Language is English -> Switch to Spanish
+      console.log('[Service] Current language is English. Switching to Spanish...');
       await settingsPage.switchLanguage('Spanish');
       
-      // Verify translation result
+      // Verify localization change
       await expect(settingsPage.pageTitle).toHaveText('Configuración', { timeout: 10000 });
-      console.log('Successfully toggled English -> Spanish');
+      console.log('[Service] Successfully toggled English -> Spanish');
 
     } else if (currentTitle.trim() === 'Configuración') {
-      // PATH B: Current language is Spanish -> Switch to English
-      console.log('Detected Spanish. Switching to English...');
+      // PATH B: Language is Spanish -> Switch to English
+      console.log('[Service] Current language is Spanish. Switching to English...');
       await settingsPage.switchLanguage('English');
       
-      // Verify translation result
+      // Verify localization change
       await expect(settingsPage.pageTitle).toHaveText('Settings', { timeout: 10000 });
-      console.log('Successfully toggled Spanish -> English');
+      console.log('[Service] Successfully toggled Spanish -> English');
 
     } else {
-      throw new Error(`Unexpected page title: ${currentTitle}`);
+      // Fail the test if the title doesn't match known localizations
+      throw new Error(`[Service] Unexpected page title detected: "${currentTitle}"`);
     }
+    
+    console.log(`[Patient] Language toggle test completed successfully\n`);
+    console.log(`✅ [Success] Test completed\n`);
+
   });
 });

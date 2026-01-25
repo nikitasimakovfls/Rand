@@ -1,8 +1,5 @@
-import axios from 'axios';
+//Random string (5 letters + 5 digits) generator
 
-/**
- * Generates a random string: 5 letters followed by 5 digits.
- */
 export function generateRandomSuffix(): string {
   const letters = 'abcdefghijklmnopqrstuvwxyz';
   const digits = '0123456789';
@@ -17,63 +14,61 @@ export function generateRandomSuffix(): string {
   return result;
 }
 
-/**
- * Waits for a welcome email on Mailsac and extracts the temporary password.
- * Logic: 4 attempts with a 15s interval before each poll (60s total timeout).
- */
-export async function waitForWelcomeEmail(email: string) {
-  const MAILSAC_API_KEY = process.env.MAILSAC_API_KEY;
-  if (!MAILSAC_API_KEY) throw new Error('🛑 MAILSAC_API_KEY is missing');
+//API Mail.tm
 
-  const maxAttempts = 4;
-  const interval = 15000;
+export const MailApi = {
+  baseUrl: 'https://api.mail.tm',
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    console.log(`\n[Mailsac] Attempt ${attempt}/${maxAttempts}: Waiting 15s before polling ${email}...`);
-    await new Promise(res => setTimeout(res, interval));
+  async getFirstDomain() {
+    const res = await fetch(`${this.baseUrl}/domains`);
+    const data = await res.json();
+    return data['hydra:member'][0].domain;
+  },
 
-    try {
-      const response = await axios.get(`https://mailsac.com/api/addresses/${email}/messages`, {
-        headers: { 'Mailsac-Key': MAILSAC_API_KEY }
-      });
-
-      // Display remaining monthly API operations
-      const remaining = response.headers['x-usage-limit-remaining'];
-      console.log(`[Mailsac] API Status: ${response.status}. Remaining Ops: ${remaining}`);
-
-      if (response.data && response.data.length > 0) {
-        const welcomeEmail = response.data.find((m: any) => 
-          m.subject.toLowerCase().includes('welcome')
-        );
-
-        if (welcomeEmail) {
-          console.log(`[Mailsac] Email found! Fetching body...`);
-          const msgResponse = await axios.get(
-            `https://mailsac.com/api/text/${email}/${welcomeEmail._id}`, 
-            { headers: { 'Mailsac-Key': MAILSAC_API_KEY } }
-          );
-          
-          const passwordMatch = msgResponse.data.match(/temporary password:\s*([^\s]+)/i);
-          if (passwordMatch) return passwordMatch[1].trim().replace(/[.,!]$/, '');
-        }
-      } else {
-        console.log(`[Mailsac] Inbox is empty.`);
-      }
-
-    } catch (error: any) {
-      if (error.response) {
-        // Handle server errors (e.g., 429 Rate Limit or 401 Unauthorized)
-        console.error(`[Mailsac Error] Status: ${error.response.status}`);
-        console.error(`[Mailsac Error] Data:`, error.response.data);
-        
-        if (error.response.status === 429) {
-            console.error('🛑 ATTENTION: API Rate Limit exceeded!');
-        }
-      } else {
-        console.error(`[Mailsac Error] Network/Unknown error: ${error.message}`);
-      }
+  async createAccount(address: string, pass: string) {
+    const res = await fetch(`${this.baseUrl}/accounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, password: pass }),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(`Failed to create mail.tm account: ${JSON.stringify(err)}`);
     }
-  }
+  },
 
-  throw new Error(`[Mailsac] Timeout: Email did not arrive after 4 attempts.`);
-}
+  async getToken(address: string, pass: string) {
+    const res = await fetch(`${this.baseUrl}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, password: pass }),
+    });
+    const data = await res.json();
+    return data.token;
+  },
+
+  async waitForMessage(token: string, subject: string, expectedCount = 1, timeout = 60000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const res = await fetch(`${this.baseUrl}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      const messages = data['hydra:member'] || [];
+
+      const matchingMessages = messages
+        .filter((m: any) => m.subject.toLowerCase().includes(subject.toLowerCase()))
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      if (matchingMessages.length >= expectedCount) {
+        const newestMsg = matchingMessages[0];
+        const fullRes = await fetch(`${this.baseUrl}/messages/${newestMsg.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        return await fullRes.json();
+      }
+      await new Promise(r => setTimeout(r, 3000));
+    }
+    throw new Error(`Subject "${subject}" not found with count ${expectedCount} within ${timeout}ms`);
+  }
+};
