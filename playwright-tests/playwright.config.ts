@@ -19,7 +19,7 @@ const environments = {
 const ENV = (process.env.ENV as keyof typeof environments) || 'dev';
 const targetURL = environments[ENV] || environments.dev;
 
-console.log(`\n🚀 Running tests on environment: [${ENV}] | URL: ${targetURL}\n`);
+//console.log(`\n🚀 Running tests on environment: [${ENV}] | URL: ${targetURL}\n`);
 
 export default defineConfig({
   testDir: './tests',

@@ -129,17 +129,23 @@ export class AdminPage {
    * Sorts the clinician table by name and waits for the API response.
    */
   async sortByName() {
-    const nameSortBtn = this.page.getByRole('button', { name: 'Name', exact: true });
-    await nameSortBtn.waitFor({ state: 'visible' });
+
+    const nameSortBtn = this.page.getByRole('button', { name: /^(First\s)?Name$/i });
     
+    await nameSortBtn.waitFor({ state: 'visible' });
+    const buttonText = await nameSortBtn.innerText();
+    
+    const queryParam = buttonText.toLowerCase().includes('first') ? 'firstName' : 'name';
+
     await Promise.all([
       this.page.waitForResponse(
-        res => res.url().includes('name&sortBy=asc') && res.status() === 200,
+        res => res.url().includes(`${queryParam}&sortBy=asc`) && res.status() === 200,
         { timeout: 20000 }
       ),
       nameSortBtn.click(),
     ]);
-    // Wait for the table to refresh by checking the first row
+
+    // Wait for the table to refresh
     await this.page.locator('tr').first().waitFor({ state: 'visible' });
   }
 
@@ -180,13 +186,17 @@ export class AdminPage {
   }
 
   /**
-   * Deletes a patient by email (handles browser native dialogs).
+   * Deletes a patient by name.
    */
-  async deletePatientByEmail(email: string) {
-    const row = this.page.locator('tr').filter({ hasText: email });
-    // Handle native browser 'confirm' dialog
+  
+    async deletePatientByName(firstName: string, lastName: string) {
+    const row = this.page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName }).first();
+    await row.getByRole('button', { name: 'Remove patient' }).click();
+
     this.page.once('dialog', dialog => dialog.accept());
-    await row.locator('.btn-danger, [title*="Delete"]').click();
-    await expect(row).not.toBeVisible();
+    const confirmBtn = this.page.locator('.modal-footer button.btn-danger, .modal-footer button:has-text("Delete")');
+    if (await confirmBtn.isVisible({ timeout: 2000 })) await confirmBtn.click();
+
+    await expect(row).not.toBeVisible({ timeout: 10000 });
   }
 }

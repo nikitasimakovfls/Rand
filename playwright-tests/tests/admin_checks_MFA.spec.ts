@@ -1,14 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 
-test.describe('Admin MFA verification', () => {
+test.describe('Admin checks MFA availability', () => {
 
-  test('admin can see the MFA QR code after starting enrollment', async ({ page }) => {
+  test('Administrator can view the MFA QR code upon starting the enrollment process', async ({ page }) => {
     const loginPage = new LoginPage(page);
 
     test.setTimeout(60000);
 
+    const baseURL = test.info().project.use.baseURL;
+    const hostname = baseURL ? new URL(baseURL).host : 'unknown';
+    console.log(`\n🚀 [Service] Running tests on host: ${hostname}\n`);
+
     // --- Step 1: Admin Authorization ---
+
     await page.goto('/');
     await loginPage.enterUsername(process.env.ADMIN_USER!);
     await loginPage.enterPassword(process.env.ADMIN_PASSWORD!);

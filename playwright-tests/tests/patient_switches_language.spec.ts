@@ -2,11 +2,15 @@ import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { SettingsPage } from '../pages/SettingsPage';
 
-test.describe('Patient Language Management', () => {
+test.describe('Patient checks Language toggling', () => {
 
-  test('should detect current language and toggle it correctly', async ({ page }) => {
+  test('Patient detects current language and toggle it correctly', async ({ page }) => {
     const loginPage = new LoginPage(page);
     const settingsPage = new SettingsPage(page);
+
+    const baseURL = test.info().project.use.baseURL;
+    const hostname = baseURL ? new URL(baseURL).host : 'unknown';
+    console.log(`\n🚀 [Service] Running tests on host: ${hostname}\n`);
 
     // --- Step 1: Authentication ---
     await page.goto('/');

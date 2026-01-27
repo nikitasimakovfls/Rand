@@ -1,163 +1,176 @@
 import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { AdminPage } from '../pages/AdminPage';
-import { generateRandomSuffix } from '../utils/helpers';
+import { generateRandomSuffix, MailApi } from '../utils/helpers';
 
-test.describe('Clinician creates patient full workflow', () => {
-  
-  test('Clinician creates a Patient, Patient activates account via email, then Admin deletes this Patient', async ({ browser }) => {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    const loginPage = new LoginPage(page);
-    const adminPage = new AdminPage(page);
-    
+test.describe('Clinician creates a Patient, full workflow', () => {
+
+  test('Clinician creates a Patient, verifies double welcome email, activates account, then Admin deletes Patient', async ({ browser }) => {
+    test.setTimeout(120000);
+
     const suffix = generateRandomSuffix();
-    const firstName = `1_PAT_${suffix}`;
-    const lastName = `1_PAT_${suffix}`;
-    const testMRN = `MRN_${suffix}`;
-    const patientUsername = `itreat_test_${suffix}`;
-    
-    // Увеличиваем таймаут для длинного сценария
-    test.setTimeout(240000);
+    const patientInitialPass = 'Qwerty123!';
+    const firstName = `1_PAT_CLIN_${suffix}`;
+    const lastName = `1_PAT_CLIN_${suffix}`;
 
-    // --- STEP 1: Email Generation via Mail7 UI ---
-    const mail7Page = await context.newPage();
-    await mail7Page.goto('https://portal.mail7.app/');
-    const mailInput = mail7Page.locator('input[placeholder="username"]');
-    await mailInput.fill(patientUsername);
-    await mail7Page.keyboard.press('Enter');
-    const fullTestEmail = await mailInput.getAttribute('value');
-    if (!fullTestEmail) throw new Error('Failed to retrieve email from Mail7 UI');
+    const baseURL = test.info().project.use.baseURL;
+    const hostname = baseURL ? new URL(baseURL).host : 'unknown';
+    console.log(`\n🚀 [Service] Running tests on host: ${hostname}\n`);
     
-    console.log(`[Mail7] Generated email address: ${fullTestEmail}`);
+    // --- STEP 1: Email Prep via API ---
+    const domain = await MailApi.getFirstDomain();
+    const fullTestEmail = `test_clin_${suffix}@${domain}`;
+    await MailApi.createAccount(fullTestEmail, patientInitialPass);
+    const mailToken = await MailApi.getToken(fullTestEmail, patientInitialPass);
 
-    // --- STEP 2: Clinician Creates Patient ---
-    await page.goto('/');
-    await loginPage.enterUsername(process.env.CLINICIAN_USER!);
-    await loginPage.enterPassword(process.env.CLINICIAN_PASSWORD!);
-    await page.keyboard.press('Enter');
+    // --- SETUP: Contexts ---
+    const clinicianContext = await browser.newContext();
+    const clinicianPageObj = new AdminPage(await clinicianContext.newPage());
+    const clinicianLogin = new LoginPage(clinicianPageObj.page);
+
+    const patientContext = await browser.newContext();
+    const patientPage = await patientContext.newPage();
+    const patientLogin = new LoginPage(patientPage);
+
+    console.log(`[Service] Created Email: ${fullTestEmail}`);
+
+    // --- STEP 2: Clinician Actions (Create Patient) ---
+    await clinicianPageObj.page.goto('/');
+    await clinicianLogin.enterUsername(process.env.CLINICIAN_USER!);
+    await clinicianLogin.enterPassword(process.env.CLINICIAN_PASSWORD!);
+    await clinicianPageObj.page.keyboard.press('Enter');
     
-    await expect(page).toHaveURL(/.*clinician/, { timeout: 15000 });
-    const addBtn = page.locator('a:has-text("Add Patient")');
+    const addBtn = clinicianPageObj.page.locator('a:has-text("Add Patient")');
     await addBtn.click();
-    
-    await adminPage.fillPatientData({
+
+    await clinicianPageObj.fillPatientData({
       first: firstName,
       last: lastName,
       email: fullTestEmail,
       sex: 'Male',
-      phone: '111111111',
+      phone: '1234567890',
       redcap: suffix,
-      mrn: testMRN,
+      mrn: `MRN_${suffix}`,
       clinic: 'Regression Clinic',
       lang: 'English',
       uncheckSms: true 
     });
+    await clinicianPageObj.markAsTestUser();
     
-    await adminPage.markAsTestUser();
-
     await Promise.all([
-      page.waitForResponse(response => 
-        response.url().includes('/clinician') && 
-        response.status() === 200,
-        { timeout: 30000 }
-      ),
-      adminPage.finalAddButton.click()
+      clinicianPageObj.page.waitForResponse(r => r.url().includes('/clinician') && r.status() === 200),
+      clinicianPageObj.finalAddButton.click()
     ]);
 
-    await adminPage.sortByFirstName();
-
-    const initialPatientRow = page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName });
-    await expect(initialPatientRow).toBeVisible({ timeout: 15000 });
-
-    console.log(`[Clinician] Patient ${fullTestEmail} created and verified`);
+    // --- STEP 2.5: Resend Welcome Email by Clinician ---
+    if (await clinicianPageObj.page.url().includes('add-patient')) {
+        await clinicianPageObj.page.goto('/clinician');
+    }
+    await clinicianPageObj.sortByName();
     
-    // --- STEP 3: Clinician Sign Out ---
-    await page.locator('li.nav-item').getByRole('link', { name: 'Sign out' }).click();
-    await loginPage.usernameInput.waitFor({ state: 'visible' });
-    await context.clearCookies();
-
-    console.log(`[Clinician] Logged Out`);
-
-    // --- STEP 5: Wait for Welcome Email in Mail7 ---
-    await mail7Page.bringToFront();
-    const welcomeSubject = 'Welcome to CareConnexus and iTREAT';
-    const welcomeEmail = mail7Page.locator('.MuiListItemText-root', { hasText: welcomeSubject }).first();
-
-    await test.step('Verify Welcome email is received', async () => {
-      await expect(welcomeEmail).toBeVisible({ timeout: 90000 });
-    });
-
-    await welcomeEmail.click();
-    const emailContent = mail7Page.locator('div', { hasText: 'temporary password:' }).last();
-    await expect(emailContent).toBeVisible({ timeout: 20000 });
-    const bodyText = await emailContent.innerText();
-    const passwordMatch = bodyText.match(/temporary password:\s*([^\s]+)/i);
-    if (!passwordMatch) throw new Error('OTP not found in email');
-    const tempPassword = passwordMatch[1].trim().replace(/[.,!]$/, '');
-    await mail7Page.close();
-
-    console.log(`[Mail7] OTP retrieved: ${tempPassword}`);
-
-    // --- STEP 6: Patient Login and Activation ---
-    await page.bringToFront();
-    await page.goto('/'); 
-    await loginPage.enterUsername(fullTestEmail);
-    await loginPage.enterPassword(tempPassword);
-    await page.keyboard.press('Enter');
+    const initialPatientRow = clinicianPageObj.page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName });
+    await initialPatientRow.getByRole('button', { name: 'Re-send Email' }).click();
     
-    const newPassword = 'Qwerty123';
-    await page.getByRole('heading', { name: 'Change password' }).waitFor({ state: 'visible' });
-    await page.locator('input[name="password"]').fill(newPassword);
-    await page.locator('input[name="confirmPassword"]').fill(newPassword);
-    await page.keyboard.press('Enter');
+    const modal = clinicianPageObj.page.locator('.modal-content');
+    await modal.getByRole('button', { name: 'Send' }).click();
+    await expect(modal).toBeHidden();
+
+    console.log(`[Clinician] Patient created and welcome email re-sent`);
+
+    // --- STEP 3: API - Verify 2 Welcome Emails and Extract OTP ---
+    const welcomeEmail = await MailApi.waitForMessage(mailToken, 'Welcome to CareConnexus', 2);
     
-    await page.locator('h1.page-title', { hasText: 'End User License Agreement' }).waitFor({ state: 'visible' });
-    await page.locator('#licenseAgreement').check();
-    await page.getByRole('button', { name: 'Save' }).click();
+    let rawContent = welcomeEmail.text || (Array.isArray(welcomeEmail.html) ? welcomeEmail.html[0] : welcomeEmail.html);
 
-    console.log(`[Patient] Logged In with password changed`);
-
-    // Questionnaire
-    await page.locator('.header-nav-title', { hasText: 'Weekly Asthma Questionnaire' }).waitFor({ state: 'visible' });
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.getByRole('button', { name: 'Next' }).click();
-
-    const answers = ['Not at all', 'Never', 'Not at all', 'Never', 'Not at all'];
-    for (let i = 0; i < answers.length; i++) {
-      await page.locator('label', { hasText: answers[i] }).click();
-      await page.getByRole('button', { name: i === answers.length - 1 ? 'Done' : 'Next' }).click();
+    if (!welcomeEmail.text) {
+        rawContent = rawContent
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, ' ');
     }
 
-    await page.getByRole('button', { name: 'Submit' }).click();
-    await page.getByRole('button', { name: 'Done' }).click();
+    const passwordMatch = rawContent.match(/temporary password:\s*([^<\s\n\r]+)/i);
 
-    console.log(`[Patient] Filled in Basic Questionnaire`);
+    if (!passwordMatch) {
+        console.error('Email content for debug:', rawContent);
+        throw new Error('[Service] OTP not found in the latest email');
+    }
 
-    // --- STEP 8: Patient Logout via Settings ---
-    await page.getByRole('link', { name: 'Settings' }).click();
-    await page.getByRole('button', { name: 'Logout' }).click();
-    await expect(loginPage.usernameInput).toBeVisible();
-    await context.clearCookies();
+    const tempPassword = passwordMatch[1].trim().replace(/[.,!?;]$/, '');
+    console.log(`[Service] Extracted OTP: ${tempPassword}`);
 
-    console.log('[Patient] Logged out');
+    // --- STEP 4: Patient Actions (Activation & Baseline) ---
+    await patientPage.goto('/');
+    await patientLogin.enterUsername(fullTestEmail);
+    await patientLogin.enterPassword(tempPassword);
+    await patientPage.keyboard.press('Enter');
 
-    // --- STEP 9: Admin Cleanup ---
-    await page.goto('/');
-    await loginPage.enterUsername(process.env.ADMIN_USER!);
-    await loginPage.enterPassword(process.env.ADMIN_PASSWORD!);
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/.*admin/, { timeout: 15000 });
-    await adminPage.goToPatients();
-    await adminPage.sortByFirstName();
-    const finalCleanupRow = page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName });
-    await expect(finalCleanupRow).toBeVisible({ timeout: 15000 });
-    await adminPage.deletePatientByName(firstName, lastName);
-    await expect(finalCleanupRow).not.toBeVisible({ timeout: 10000 });
+    const newPassword = 'Qwerty123!';
+    await patientPage.getByRole('heading', { name: 'Change password' }).waitFor({ state: 'visible' });
+    await patientPage.locator('input[name="password"]').fill(newPassword);
+    await patientPage.locator('input[name="confirmPassword"]').fill(newPassword);
+    await patientPage.keyboard.press('Enter');
+
+    await patientPage.locator('#licenseAgreement').check();
+    await patientPage.getByRole('button', { name: 'Save' }).click();
+
+    // Baseline Flow
+    await patientPage.getByRole('button', { name: 'Next' }).click();
+    await patientPage.getByRole('button', { name: 'Next' }).click();
+    const baselineAnswers = ['Not at all', 'Never', 'Not at all', 'Never', 'Not at all'];
+    for (const ans of baselineAnswers) {
+      await patientPage.locator('label', { hasText: ans }).click();
+      await patientPage.getByRole('button', { name: /Next|Done/ }).click();
+    }
+    await patientPage.getByRole('button', { name: 'Submit' }).click();
+    await patientPage.getByRole('button', { name: 'Done' }).click();
+
+    console.log(`[Patient] Baseline complete`);
+
+    // --- STEP 5: Clinician triggers Password Reset & Verify Link ---
+    await clinicianPageObj.page.bringToFront();
+    await clinicianPageObj.page.goto('/clinician');
+    await clinicianPageObj.sortByName();
     
-    console.log(`[Admin]: Patient ${fullTestEmail} successfully removed\n`);
+    const patientRowAfterActivation = clinicianPageObj.page.locator('tr').filter({ hasText: firstName });
+    await patientRowAfterActivation.getByRole('button', { name: 'Re-send Email' }).click();
+
+    const resetModal = clinicianPageObj.page.locator('.modal-content');
+    await expect(resetModal).toBeVisible();
+    await resetModal.getByRole('button', { name: 'Send' }).click();
+
+    const resetEmail = await MailApi.waitForMessage(mailToken, 'Password Reset Requested');
+    
+    const currentHost = new URL(clinicianPageObj.page.url()).host;
+    const htmlContent = Array.isArray(resetEmail.html) ? resetEmail.html[0] : resetEmail.html;
+    expect(htmlContent).toContain(currentHost);
+
+    console.log(`[Clinician] Reset link verified via API on host: ${currentHost}`);
+
+    // --- STEP 6: Admin Cleanup ---
+    const adminContext = await browser.newContext();
+    const adminPageObj = new AdminPage(await adminContext.newPage());
+    const adminLogin = new LoginPage(adminPageObj.page);
+
+    await adminPageObj.page.goto('/');
+    await adminLogin.enterUsername(process.env.ADMIN_USER!);
+    await adminLogin.enterPassword(process.env.ADMIN_PASSWORD!);
+    await adminPageObj.page.keyboard.press('Enter');
+
+    await adminPageObj.goToPatients();
+    await adminPageObj.sortByName();
+    await adminPageObj.deletePatientByName(firstName, lastName);
+    
+    await expect(adminPageObj.page.locator('tr').filter({ hasText: firstName })).not.toBeVisible();
+
+    await clinicianContext.close();
+    await patientContext.close();
+    await adminContext.close();
+
+    console.log(`[Admin] Patient ${fullTestEmail} successfully removed\n`);
     console.log(`✅ [Success] Test completed\n`);
-    
-    await context.close();
   });
 });

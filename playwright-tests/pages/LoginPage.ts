@@ -20,8 +20,8 @@ export class LoginPage {
   }
 
   /**
-   * Enters the username/email and proceeds to the password step.
-   * Checks for immediate validation errors (e.g., incorrect format).
+   * Enters the username/email and proceeds to the password step
+   * Checks for immediate validation errors
    */
   async enterUsername(username: string) {
     await this.usernameInput.waitFor({ state: 'visible' });
@@ -36,8 +36,8 @@ export class LoginPage {
   }
 
   /**
-   * Enters the password and completes the authentication process.
-   * Waits for either a successful navigation or an error message to appear.
+   * Enters the password and completes the authentication process
+   * Waits for either a successful navigation or an error message to appear
    */
   async enterPassword(password: string) {
     await this.passwordInput.waitFor({ state: 'visible' });

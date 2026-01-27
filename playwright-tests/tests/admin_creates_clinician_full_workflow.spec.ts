@@ -3,13 +3,17 @@ import { LoginPage } from '../pages/LoginPage';
 import { AdminPage } from '../pages/AdminPage';
 import { generateRandomSuffix, MailApi } from '../utils/helpers'; 
 
-test.describe('Admin and Clinician parallel sessions workflow', () => {
+test.describe('Admin creates a Clinician, full workflow', () => {
 
   test('Admin creates a Clinician, Clinician activates account, Admin deletes Clinician', async ({ browser }) => {
-    test.setTimeout(240000);
+    test.setTimeout(90000);
 
     const suffix = generateRandomSuffix();
     const clinicianPass = 'Qwerty123';
+
+    const baseURL = test.info().project.use.baseURL;
+    const hostname = baseURL ? new URL(baseURL).host : 'unknown';
+    console.log(`\n🚀 [Service] Running tests on host: ${hostname}\n`);
     
     // --- STEP 1: Email Prep via API ---
     const domain = await MailApi.getFirstDomain();
@@ -88,12 +92,12 @@ test.describe('Admin and Clinician parallel sessions workflow', () => {
     await confirmModal.getByRole('button', { name: 'Send' }).click();
 
     const resetEmail = await MailApi.waitForMessage(mailToken, 'Password Reset Requested');
-    const expectedLinkPart = 'dev.itreat.clnapp.com';
+    const currentHost = new URL(adminPageObj.page.url()).host;
     
     const htmlContent = Array.isArray(resetEmail.html) ? resetEmail.html[0] : resetEmail.html;
-    expect(htmlContent).toContain(expectedLinkPart);
+    expect(htmlContent).toContain(currentHost);
 
-    console.log(`[Admin] Reset email verified via API`);
+    console.log(`[Admin] Reset email verified via API for host: ${currentHost}`);
 
     // --- STEP 6: Admin Cleanup ---
     await adminPageObj.page.reload(); 
