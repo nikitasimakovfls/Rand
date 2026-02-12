@@ -14,8 +14,8 @@ test.describe('Patient checks Language toggling', () => {
 
     // --- Step 1: Authentication ---
     await page.goto('/');
-    await loginPage.enterUsername(process.env.PATIENT_USER!);
-    await loginPage.enterPassword(process.env.PATIENT_PASSWORD!);
+    await loginPage.enterUsername(process.env.PATIENT_EU_USER!);
+    await loginPage.enterPassword(process.env.PATIENT_EU_PASSWORD!);
 
     console.log(`[Patient] Loged In`);
 

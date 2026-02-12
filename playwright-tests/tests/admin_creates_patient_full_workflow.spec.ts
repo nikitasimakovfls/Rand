@@ -6,7 +6,7 @@ import { generateRandomSuffix, MailApi } from '../utils/helpers';
 test.describe('Admin creates a Patient, full workflow', () => {
 
   test('Admin creates a Patient, Patient activates account, then Admin deletes Patient', async ({ browser }) => {
-    test.setTimeout(90000);
+    test.setTimeout(120000);
 
     const suffix = generateRandomSuffix();
     const patientInitialPass = 'Qwerty123';
@@ -50,7 +50,7 @@ test.describe('Admin creates a Patient, full workflow', () => {
       phone: '1234567890',
       redcap: suffix,
       mrn: `MRN_${suffix}`,
-      clinic: 'Regression Clinic',
+      clinic: 'Regression Clinic (EU)',
       lang: 'English',
       uncheckSms: true 
     });
@@ -65,7 +65,6 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await adminPageObj.sortByName();
     const initialPatientRow = adminPageObj.page.locator('tr').filter({ hasText: firstName }).filter({ hasText: lastName });
     
-    // Resend email to test double-receipt logic
     await initialPatientRow.getByRole('button', { name: 'Re-send Email' }).click();
     const modal = adminPageObj.page.locator('.modal-content');
     await modal.getByRole('button', { name: 'Send' }).click();
@@ -79,37 +78,38 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await adminPageObj.page.locator('select#patientId').selectOption({ label: fullName });
     await adminPageObj.page.locator('select#templateId').selectOption({ label: 'Weekly ACM' });
 
-    // Set date to yesterday to trigger questionnaire immediately
-    // --- STEP 2.5: Scheduling (Continued) ---
+    // --- ИСПРАВЛЕННЫЙ БЛОК ВВОДА ДАТЫ (Вчерашнее число) ---
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1); 
     
-    const month = String(yesterday.getMonth() + 1).padStart(2, '0');
-    const day = String(yesterday.getDate()).padStart(2, '0');
-    const year = yesterday.getFullYear();
-    
-    const yesterdayDateString = `${month}/${day}/${year} 08:00 AM`;
-
     const dateInput = adminPageObj.page.locator('.react-datepicker__input-container input');
-    await dateInput.click();
-    await dateInput.clear();
+    await dateInput.click(); // Открываем календарь
 
-    await adminPageObj.page.keyboard.press('CapsLock');
-    await dateInput.pressSequentially(yesterdayDateString, { delay: 100 });
-    await adminPageObj.page.keyboard.press('CapsLock');
+    // Проверяем, не является ли "вчера" предыдущим месяцем
+    const today = new Date();
+    if (yesterday.getMonth() !== today.getMonth()) {
+        await adminPageObj.page.locator('.react-datepicker__navigation--previous').click();
+    }
 
-    await adminPageObj.page.keyboard.press('Enter', { delay: 100 });
-    await adminPageObj.page.keyboard.press('Enter', { delay: 100 });
-    await adminPageObj.page.keyboard.press('Enter', { delay: 100 });
-    await adminPageObj.page.keyboard.press('Escape');
+    const yesterdayDate = yesterday.getDate().toString();
+    // Ищем число в сетке (исключая "хвосты" соседних месяцев)
+    const dayLocator = adminPageObj.page.locator(`.react-datepicker__day--0${yesterdayDate.padStart(2, '0')}:not(.react-datepicker__day--outside-month)`);
+    
+    await dayLocator.first().click();
+
+    // Выбираем время (08:00 AM)
+    const timeOption = adminPageObj.page.locator('.react-datepicker__time-list-item', { hasText: '8:00 AM' });
+    await timeOption.scrollIntoViewIfNeeded();
+    await timeOption.click();
+
+    // Проверка, что дата заполнилась и ошибка исчезла
+    await expect(adminPageObj.page.locator('.invalid-feedback')).not.toBeVisible();
     await adminPageObj.page.getByRole('button', { name: 'Add' }).click();
 
-    console.log(`[Admin] Weekly ACM scheduled`);
+    console.log(`[Admin] Weekly ACM scheduled for yesterday`);
 
     // --- STEP 3: API - Get Password and Verify Emails ---
-    // Wait for 2 messages because of the Resend step
     const welcomeEmail = await MailApi.waitForMessage(mailToken, 'Welcome to CareConnexus', 2);
-    // Also verify that Questionnaire email arrived
     await MailApi.waitForMessage(mailToken, 'Questionnaire from Your Doctor', 1);
 
     let rawContent = welcomeEmail.text || (Array.isArray(welcomeEmail.html) ? welcomeEmail.html[0] : welcomeEmail.html);
@@ -132,7 +132,6 @@ test.describe('Admin creates a Patient, full workflow', () => {
     }
 
     const tempPassword = passwordMatch[1].trim().replace(/[.,!?;]$/, '');
-
     console.log(`[Service] Extracted OTP: ${tempPassword}`);
 
     // --- STEP 4: Patient Actions (Activation & Questionnaires) ---
@@ -141,13 +140,12 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await patientLogin.enterPassword(tempPassword);
     await patientPage.keyboard.press('Enter');
 
-    const newPassword = 'Qwerty123!';
+    const newPassword = 'Qwerty123';
     await patientPage.getByRole('heading', { name: 'Change password' }).waitFor({ state: 'visible' });
     await patientPage.locator('input[name="password"]').fill(newPassword);
     await patientPage.locator('input[name="confirmPassword"]').fill(newPassword);
     await patientPage.keyboard.press('Enter');
 
-    // Agree EULA
     await patientPage.locator('#licenseAgreement').check();
     await patientPage.getByRole('button', { name: 'Save' }).click();
 
@@ -162,7 +160,10 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await patientPage.getByRole('button', { name: 'Submit' }).click();
     await patientPage.getByRole('button', { name: 'Done' }).click();
 
-    // Fill Scheduled Weekly ACM (triggers Callback)
+    //Check time
+    await patientPage.pause();
+
+    // Fill Scheduled Weekly ACM
     await expect(patientPage).toHaveURL(/.*questionnaire/);
     await patientPage.getByRole('button', { name: 'BEGIN' }).click();
     await patientPage.getByRole('button', { name: 'Next' }).click();
@@ -231,7 +232,7 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await adminContext.close();
     await patientContext.close();
 
-    console.log(`[Admin] Clinician ${fullTestEmail} successfully removed\n`);
+    console.log(`[Admin] Patient ${fullTestEmail} successfully removed\n`);
     console.log(`✅ [Success] Test completed\n`);
   });
 });

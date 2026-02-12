@@ -73,7 +73,7 @@ test.describe('Admin creates a Clinician, full workflow', () => {
     await clinicianLogin.enterPassword(tempPassword);
     await clinicianPage.keyboard.press('Enter');
 
-    const newPassword = 'Qwerty123!';
+    const newPassword = 'Qwerty123';
     await clinicianPage.getByRole('heading', { name: 'Change password' }).waitFor({ state: 'visible' });
     await clinicianPage.locator('input[name="password"]').fill(newPassword);
     await clinicianPage.locator('input[name="confirmPassword"]').fill(newPassword);

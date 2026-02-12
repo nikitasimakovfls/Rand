@@ -9,7 +9,7 @@ test.describe('Clinician creates a Patient, full workflow', () => {
     test.setTimeout(120000);
 
     const suffix = generateRandomSuffix();
-    const patientInitialPass = 'Qwerty123!';
+    const patientInitialPass = 'Qwerty123';
     const firstName = `1_PAT_CLIN_${suffix}`;
     const lastName = `1_PAT_CLIN_${suffix}`;
 
@@ -51,7 +51,7 @@ test.describe('Clinician creates a Patient, full workflow', () => {
       phone: '1234567890',
       redcap: suffix,
       mrn: `MRN_${suffix}`,
-      clinic: 'Regression Clinic',
+      clinic: 'Regression Clinic (EU)',
       lang: 'English',
       uncheckSms: true 
     });
@@ -108,7 +108,7 @@ test.describe('Clinician creates a Patient, full workflow', () => {
     await patientLogin.enterPassword(tempPassword);
     await patientPage.keyboard.press('Enter');
 
-    const newPassword = 'Qwerty123!';
+    const newPassword = 'Qwerty123';
     await patientPage.getByRole('heading', { name: 'Change password' }).waitFor({ state: 'visible' });
     await patientPage.locator('input[name="password"]').fill(newPassword);
     await patientPage.locator('input[name="confirmPassword"]').fill(newPassword);

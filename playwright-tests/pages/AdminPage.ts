@@ -87,7 +87,7 @@ export class AdminPage {
     await addClinicBtn.click();
     
     await this.clinicSelectAddDoctor.waitFor({ state: 'visible' });
-    await this.clinicSelectAddDoctor.selectOption({ label: 'Regression Clinic' });
+    await this.clinicSelectAddDoctor.selectOption({ label: 'Regression Clinic (EU)' });
     
     const callbackLabel = this.page.locator('label[for="isGetCallbackRequests"]');
     // Toggle callback checkbox if label is visible, otherwise check directly
