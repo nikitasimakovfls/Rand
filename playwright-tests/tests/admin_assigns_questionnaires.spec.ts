@@ -82,10 +82,20 @@ test('Admin schedules questionnaires, patients verifies and admin deletes Weekly
     await expect(expireElement).toBeVisible({ timeout: 15000 });
 
     const fullText = await expireElement.innerText();
-    // Added s? to correctly handle both "hour" and "hours"
-    const match = fullText.match(/expires in (an|\d+) hours?/i);
+    
+    const match = fullText.match(/expires in (less than an|an|\d+) hours?/i);
+
     if (match) {
-      const actualHours = match[1].toLowerCase() === 'an' ? 1 : parseInt(match[1]);
+      let actualHours: number;
+      const matchedValue = match[1].toLowerCase();
+
+      if (matchedValue === 'less than an') {
+        actualHours = 0;
+      } else if (matchedValue === 'an') {
+        actualHours = 1;
+      } else {
+        actualHours = parseInt(matchedValue);
+      }
       
       console.log(`[Service] Patient sees: ${fullText} (Parsed as: ${actualHours}h)`);
       
