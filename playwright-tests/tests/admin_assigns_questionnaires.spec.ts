@@ -4,20 +4,25 @@ import { LoginPage } from '../pages/LoginPage';
 
 test('Admin schedules questionnaires, patients verifies and admin deletes Weekly ACMs', async ({ browser }) => {
   test.setTimeout(120000);
+
+  // Extract timezones from config
+  const euTz = (test.info().project.use as any).euTimezone || 'UTC';
+  const usTz = (test.info().project.use as any).usTimezone || 'UTC';
+
   const patients = [
     {
       fullName: 'Regression Patient EU',
       email: process.env.PATIENT_EU_USER!,
       pass: process.env.PATIENT_EU_PASSWORD!,
-      tz: 'Europe/Belgrade',
-      label: 'EU (Belgrade)'
+      tz: euTz,
+      label: `EU (${euTz})`
     },
     {
       fullName: 'Regression Patient US',
       email: process.env.PATIENT_US_USER!,
       pass: process.env.PATIENT_US_PASSWORD!,
-      tz: 'America/Los_Angeles',
-      label: 'US (Los Angeles)'
+      tz: usTz,
+      label: `US (${usTz})`
     }
   ];
 
@@ -39,7 +44,7 @@ test('Admin schedules questionnaires, patients verifies and admin deletes Weekly
     console.log(`[Admin] Scheduling questionnaire for ${p.label}`);
     await adminPage.getByRole('link', { name: 'Schedule' }).click();
     await adminPage.getByRole('link', { name: 'Add' }).click();
-    // Select patient in the creation form via standard select (if it is a standard one)
+    
     await adminPage.locator('select#patientId').selectOption({ label: p.fullName });
     await adminPage.locator('select#templateId').selectOption({ label: 'Weekly ACM' });
 
@@ -69,6 +74,7 @@ test('Admin schedules questionnaires, patients verifies and admin deletes Weekly
     console.log(`[Service] Clinic Local Time: ${nowInClinic.toFormat('HH:mm')}`);
     console.log(`[Service] Expected remaining: ${expectedHours} hours`);
 
+    // Use timezoneId for browser context to ensure internal JS date logic matches
     const patientContext = await browser.newContext({ timezoneId: p.tz });
     const patientPage = await patientContext.newPage();
     const patientLogin = new LoginPage(patientPage);
@@ -82,7 +88,6 @@ test('Admin schedules questionnaires, patients verifies and admin deletes Weekly
     await expect(expireElement).toBeVisible({ timeout: 15000 });
 
     const fullText = await expireElement.innerText();
-    
     const match = fullText.match(/expires in (less than an|an|\d+) hours?/i);
 
     if (match) {

@@ -6,6 +6,14 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 /**
+ * Define custom options type to avoid TypeScript errors
+ */
+interface CustomOptions {
+  euTimezone?: string;
+  usTimezone?: string;
+}
+
+/**
  * Environment selection logic based on ENV variable
  */
 const environments = {
@@ -19,9 +27,14 @@ const environments = {
 const ENV = (process.env.ENV as keyof typeof environments) || 'dev';
 const targetURL = environments[ENV] || environments.dev;
 
-//console.log(`\n🚀 Running tests on environment: [${ENV}] | URL: ${targetURL}\n`);
+/**
+ * Read configurable timezones from .env
+ */
+const EU_TIMEZONE = process.env.EU_TIMEZONE;
+const US_TIMEZONE = process.env.US_TIMEZONE;
 
-export default defineConfig({
+// Pass CustomOptions to defineConfig to register new properties
+export default defineConfig<CustomOptions>({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -31,6 +44,12 @@ export default defineConfig({
   
   use: {
     baseURL: targetURL,
+    /**
+     * Custom parameters are now recognized by TypeScript
+     */
+    euTimezone: EU_TIMEZONE,
+    usTimezone: US_TIMEZONE,
+    
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -40,7 +59,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        /**
+         * Note: Playwright's native timezoneId setting for the browser context.
+         */
+        timezoneId: EU_TIMEZONE 
+      },
     },
   ],
 });

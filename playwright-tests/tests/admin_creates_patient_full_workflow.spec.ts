@@ -160,9 +160,6 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await patientPage.getByRole('button', { name: 'Submit' }).click();
     await patientPage.getByRole('button', { name: 'Done' }).click();
 
-    //Check time
-    await patientPage.pause();
-
     // Fill Scheduled Weekly ACM
     await expect(patientPage).toHaveURL(/.*questionnaire/);
     await patientPage.getByRole('button', { name: 'BEGIN' }).click();

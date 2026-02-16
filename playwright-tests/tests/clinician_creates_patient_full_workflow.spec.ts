@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { AdminPage } from '../pages/AdminPage';
 import { generateRandomSuffix, MailApi } from '../utils/helpers';
+import { DateTime } from 'luxon';
 
 test.describe('Clinician creates a Patient, full workflow', () => {
 
@@ -129,6 +130,63 @@ test.describe('Clinician creates a Patient, full workflow', () => {
     await patientPage.getByRole('button', { name: 'Done' }).click();
 
     console.log(`[Patient] Baseline complete`);
+
+    // --- STEP 4.2: Verify Upcoming Questionnaire Time ---
+    const upcomingItem = patientPage.locator('.list-item', { hasText: /Questionnaire/i });
+    await expect(upcomingItem).toBeVisible({ timeout: 10000 });
+
+    const upcomingText = await upcomingItem.locator('.list-item-content').innerText();
+    
+    // 1. Calculate Expected Time using Config Timezone
+    const tz = (test.info().project.use.timezoneId as string) || 'UTC';
+    const nowInTz = DateTime.now().setZone(tz);
+    
+    // Schedule: Tuesday at 10:00 AM
+    let nextOccurrence = nowInTz.set({ weekday: 2, hour: 10, minute: 0, second: 0, millisecond: 0 });
+    
+    // Target next week if current time is past Tuesday 10 AM
+    if (nowInTz > nextOccurrence) {
+        nextOccurrence = nextOccurrence.plus({ weeks: 1 });
+    }
+    
+    const diff = nextOccurrence.diff(nowInTz, ['days', 'hours']).toObject();
+    const expectedHoursTotal = (Math.floor(diff.days || 0) * 24) + Math.floor(diff.hours || 0);
+
+    console.log(`[Patient] Upcoming questionnaire: "${upcomingText.trim()}"`);
+    console.log(`[Service] Target Timezone (${tz}): ${nowInTz.toFormat('HH:mm')}, Expected in: ${expectedHoursTotal}h`);
+
+    // 2. Parse UI Text
+    // Regex covers: Days and Hours, only Hours, "an hour", or "less than an hour"
+    const timeMatch = upcomingText.match(/in (\d+) days and (\d+) hours|in (\d+) hours|(less than an|an) hour/i);
+
+    let actualHoursTotal: number;
+
+    if (timeMatch) {
+        if (timeMatch[4]) {
+            // "an hour" -> 1, "less than an hour" -> 0
+            actualHoursTotal = timeMatch[4].toLowerCase().includes('an') ? 1 : 0;
+        } else if (timeMatch[3]) {
+            // e.g. "in 13 hours"
+            actualHoursTotal = parseInt(timeMatch[3]);
+        } else if (timeMatch[1] && timeMatch[2]) {
+            // e.g. "in 1 days and 13 hours"
+            actualHoursTotal = (parseInt(timeMatch[1]) * 24) + parseInt(timeMatch[2]);
+        } else {
+            actualHoursTotal = 0;
+        }
+    } else if (upcomingText.match(/[a-zA-Z]{3} \d{1,2}/)) {
+        // CASE 3: Only date present (e.g., "Feb 16"), meaning < 1 hour remains
+        console.log(`[Service] Only date detected ("${upcomingText.trim()}"), assuming < 1h remaining.`);
+        actualHoursTotal = 0;
+    } else {
+        throw new Error(`[Service] Could not parse upcoming time: "${upcomingText}"`);
+    }
+
+    console.log(`[Service] Parsed UI: ${actualHoursTotal}h`);
+
+    // 3. Validation with 1h rounding tolerance
+    expect(actualHoursTotal).toBeGreaterThanOrEqual(expectedHoursTotal - 1);
+    expect(actualHoursTotal).toBeLessThanOrEqual(expectedHoursTotal);
 
     // --- STEP 5: Clinician triggers Password Reset & Verify Link ---
     await clinicianPageObj.page.bringToFront();
