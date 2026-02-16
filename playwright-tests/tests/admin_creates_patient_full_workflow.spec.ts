@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { AdminPage } from '../pages/AdminPage';
 import { generateRandomSuffix, MailApi } from '../utils/helpers';
+import { DateTime } from 'luxon';
 
 test.describe('Admin creates a Patient, full workflow', () => {
 
@@ -39,6 +40,7 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await adminPageObj.page.goto('/');
     await adminLogin.enterUsername(process.env.ADMIN_USER!);
     await adminLogin.enterPassword(process.env.ADMIN_PASSWORD!);
+    await adminPageObj.page.keyboard.press('Enter');
     
     await adminPageObj.goToPatients();
     await adminPageObj.openAddPatientForm();
@@ -78,31 +80,31 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await adminPageObj.page.locator('select#patientId').selectOption({ label: fullName });
     await adminPageObj.page.locator('select#templateId').selectOption({ label: 'Weekly ACM' });
 
-    // --- ИСПРАВЛЕННЫЙ БЛОК ВВОДА ДАТЫ (Вчерашнее число) ---
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1); 
+    // --- DATE INPUT BLOCK (Setting date to yesterday) ---
+    const tz = (test.info().project.use.euTimezone as string) || 'UTC';
+    const nowInTz = DateTime.now().setZone(tz);
+    const yesterday = nowInTz.minus({ days: 1 });
     
     const dateInput = adminPageObj.page.locator('.react-datepicker__input-container input');
-    await dateInput.click(); // Открываем календарь
+    await dateInput.click(); // Open calendar
 
-    // Проверяем, не является ли "вчера" предыдущим месяцем
-    const today = new Date();
-    if (yesterday.getMonth() !== today.getMonth()) {
+    // Check if "yesterday" belongs to the previous month
+    if (yesterday.month !== nowInTz.month) {
         await adminPageObj.page.locator('.react-datepicker__navigation--previous').click();
     }
 
-    const yesterdayDate = yesterday.getDate().toString();
-    // Ищем число в сетке (исключая "хвосты" соседних месяцев)
-    const dayLocator = adminPageObj.page.locator(`.react-datepicker__day--0${yesterdayDate.padStart(2, '0')}:not(.react-datepicker__day--outside-month)`);
+    const yesterdayDate = yesterday.day.toString().padStart(2, '0');
+    // Find day in grid (excluding days from adjacent months)
+    const dayLocator = adminPageObj.page.locator(`.react-datepicker__day--0${yesterdayDate}:not(.react-datepicker__day--outside-month)`);
     
     await dayLocator.first().click();
 
-    // Выбираем время (08:00 AM)
+    // Select time (08:00 AM)
     const timeOption = adminPageObj.page.locator('.react-datepicker__time-list-item', { hasText: '8:00 AM' });
     await timeOption.scrollIntoViewIfNeeded();
     await timeOption.click();
 
-    // Проверка, что дата заполнилась и ошибка исчезла
+    // Verify date is filled and error messages are hidden
     await expect(adminPageObj.page.locator('.invalid-feedback')).not.toBeVisible();
     await adminPageObj.page.getByRole('button', { name: 'Add' }).click();
 
@@ -207,6 +209,7 @@ test.describe('Admin creates a Patient, full workflow', () => {
     await clinicianPage.goto('/');
     await clinicianLogin.enterUsername(process.env.CLINICIAN_USER!);
     await clinicianLogin.enterPassword(process.env.CLINICIAN_PASSWORD!);
+    await clinicianPage.keyboard.press('Enter');
     
     const clinicianPatientRow = clinicianPage.locator('tr').filter({ hasText: firstName });
     await clinicianPatientRow.getByRole('link', { name: 'Graph' }).click();
